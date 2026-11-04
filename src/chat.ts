@@ -23,8 +23,9 @@ export class ChatManager {
     if (!message || username === this.bot.username) return;
     logChat('minecraft', username, message);
     touchPlayer(username);
-    this.emit('chat', { source: 'minecraft', username, message, time: new Date().toISOString() });
-    if (Date.now() < this.webListenUntil) this.emit('webIncoming', { username, message, time: new Date().toISOString() });
+
+    const webListening = Date.now() < this.webListenUntil;
+    if (webListening) this.emit('webIncoming', { source: 'minecraft', username, message, time: new Date().toISOString() });
 
     const commandResponse = this.movement.command(message, username);
     if (commandResponse) { this.sendBotMessage(commandResponse); return; }
@@ -35,7 +36,9 @@ export class ChatManager {
     const mentionIndex = lower.indexOf(name);
     const mentioned = mentionIndex !== -1;
     const active = Date.now() < this.sessionUntil;
-    if (!mentioned && !active) return;
+    // Dashboard chat is isolated: replies in that five-minute window do not invoke AI unless Lumi is explicitly mentioned.
+    if (!mentioned && (webListening || !active)) return;
+
     const cleaned = mentioned
       ? (message.slice(0, mentionIndex) + message.slice(mentionIndex + this.bot.username.length)).replace(/^[\s,:-]+|[\s,:-]+$/g, '').trim()
       : message.trim();
@@ -52,6 +55,8 @@ export class ChatManager {
         const result = await this.ai.reply(this.history, memories, username, message);
         this.history.push({ role: 'assistant', content: result.reply });
         this.history = this.history.slice(-config.contextMessages);
+        this.sessionUntil = Date.now() + config.chatTimeout;
+        this.emit('conversationState', { active: true, expiresAt: this.sessionUntil });
         this.sendBotMessage(result.reply);
         this.emit('aiResponse', { provider: result.provider, model: result.model });
         for (const suggestion of result.suggestions) {
