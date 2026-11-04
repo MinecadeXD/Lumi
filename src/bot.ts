@@ -1,0 +1,29 @@
+import mineflayer, { Bot } from 'mineflayer';
+import { config } from './config';
+import { MovementController } from './movement';
+import { ChatManager } from './chat';
+
+export interface BotRuntime { bot: Bot; movement: MovementController; chat: ChatManager; connected: boolean; }
+type Emitter = (event: string, payload: any) => void;
+
+export function createBotRuntime(emit: Emitter): BotRuntime {
+  const bot = mineflayer.createBot({
+    host: config.minecraft.host, port: config.minecraft.port, username: config.minecraft.username,
+    auth: config.minecraft.auth as any, version: config.minecraft.version
+  });
+  let connected = false;
+  const movement = new MovementController(bot);
+  const chat = new ChatManager(bot, movement, emit);
+  bot.on('login', () => { connected = true; console.log('[Minecraft] Logged in as ' + bot.username); emit('status', status()); });
+  bot.on('spawn', () => { connected = true; movement.stop(); console.log('[Minecraft] Spawned. Lumi is idle.'); emit('status', status()); });
+  bot.on('health', () => emit('status', status()));
+  bot.on('move', () => emit('position', status().position));
+  bot.on('kicked', reason => { connected = false; console.error('[Minecraft] Kicked:', reason); emit('connectionError', { message: String(reason) }); emit('status', status()); });
+  bot.on('end', () => { connected = false; console.warn('[Minecraft] Disconnected. Exiting for process-manager restart.'); emit('status', status()); setTimeout(() => process.exit(1), 5000); });
+  bot.on('error', error => { console.error('[Minecraft]', error.message); emit('connectionError', { message: error.message }); });
+  function status(): any {
+    const pos = bot.entity?.position;
+    return { connected, username: bot.username, health: bot.health, food: bot.food, position: pos ? { x: Number(pos.x.toFixed(2)), y: Number(pos.y.toFixed(2)), z: Number(pos.z.toFixed(2)) } : null };
+  }
+  return { bot, movement, chat, get connected() { return connected; } };
+}
