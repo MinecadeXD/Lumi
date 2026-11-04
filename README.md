@@ -15,7 +15,7 @@ A female AI Minecraft companion with a shared server conversation, fixed movemen
 - Fixed commands: \`Lumi come here\`, \`Lumi goto X Y Z\`, \`Lumi follow me\`, \`Lumi stop\`, \`Lumi stay\`, \`Lumi jump\`, \`Lumi sneak\`.
 - Passive by default. No autonomous wandering.
 - Web dashboard with live status, movement controls, chat bridge, memory editor and provider settings.
-- Prismarine Viewer for the bot's world perspective.
+- Prismarine Viewer for the bot's world perspective, reverse-proxied through the dashboard.
 - Dashboard chat is separate from AI conversation and listens for incoming Minecraft chat for five minutes after a dashboard message.
 
 ## Requirements
@@ -23,6 +23,7 @@ A female AI Minecraft companion with a shared server conversation, fixed movemen
 - Node.js 22 or newer.
 - A Minecraft Java server compatible with 1.21.11.
 - A hosting environment that can keep a Node.js process running.
+- One public TCP port allocation.
 - One or more API keys for OpenAI-compatible chat-completion endpoints.
 
 ## Installation

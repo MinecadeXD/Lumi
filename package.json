@@ -10,6 +10,7 @@
     "better-sqlite3": "^12.2.0",
     "dotenv": "^16.6.1",
     "express": "^5.1.0",
+    "http-proxy": "^1.18.1",
     "mineflayer": "^4.39.0",
     "mineflayer-pathfinder": "^2.4.5",
     "prismarine-viewer": "^1.33.0",

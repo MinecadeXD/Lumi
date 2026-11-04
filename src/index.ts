@@ -13,8 +13,13 @@ async function main(): Promise<void> {
     if (typeof viewer.mineflayer === 'function') {
       runtime.bot.once('spawn', () => {
         try {
-          viewer.mineflayer(runtime.bot, { port: config.viewer.port, firstPerson: false, viewDistance: config.viewer.distance });
-          console.log('[Viewer] Started on port ' + config.viewer.port);
+          viewer.mineflayer(runtime.bot, {
+            port: config.viewer.port,
+            prefix: '/viewer',
+            firstPerson: false,
+            viewDistance: config.viewer.distance
+          });
+          console.log('[Viewer] Internal viewer started; public route is /viewer/');
         } catch (error) { console.error('[Viewer]', error); }
       });
     } else console.warn('[Viewer] Mineflayer adapter not found in prismarine-viewer.');

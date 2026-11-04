@@ -9,9 +9,22 @@ import { BotRuntime } from './bot';
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
+const httpProxy = require('http-proxy');
+const viewerProxy = httpProxy.createProxyServer({
+  target: 'http://127.0.0.1:' + config.viewer.port,
+  ws: true,
+  changeOrigin: true
+});
+viewerProxy.on('error', (_error: Error, _req: Request, res: any) => {
+  if (res && typeof res.writeHead === 'function') {
+    if (!res.headersSent) res.writeHead(502);
+    res.end('Viewer is starting or unavailable.');
+  } else if (res && typeof res.destroy === 'function') {
+    res.destroy();
+  }
+});
+
 app.use(express.json({ limit: '64kb' }));
-app.use(express.static(path.join(process.cwd(), 'public')));
 
 let runtime: BotRuntime | null = null;
 const sessions = new Set<string>();
@@ -35,6 +48,29 @@ function auth(req: Request, res: Response, next: NextFunction): void {
   if (!valid(requestToken(req))) { res.status(401).json({ error: 'Authentication required.' }); return; }
   next();
 }
+
+// Viewer HTTP requests share the dashboard's authenticated session.
+app.use('/viewer', auth, (req, res) => {
+  req.url = req.originalUrl;
+  viewerProxy.web(req, res);
+});
+app.use(express.static(path.join(process.cwd(), 'public')));
+
+// Attach Socket.IO after the proxy upgrade listener and leave unrelated
+// WebSocket paths available for the viewer's own Socket.IO server.
+server.on('upgrade', (req, socket, head) => {
+  if (!req.url || !(req.url === '/viewer' || req.url.startsWith('/viewer/'))) return;
+  const match = (req.headers.cookie || '').match(/(?:^|;\s*)lumi_session=([^;]+)/);
+  const value = match ? decodeURIComponent(match[1]) : '';
+  if (!valid(value)) {
+    socket.write('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n');
+    socket.destroy();
+    return;
+  }
+  viewerProxy.ws(req, socket, head);
+});
+const io = new Server(server, { destroyUpgrade: false });
+
 app.post('/api/login', (req, res) => {
   if (String(req.body?.username || '') !== config.web.username || String(req.body?.password || '') !== config.web.password) {
     res.status(401).json({ error: 'Incorrect username or password.' }); return;
@@ -55,7 +91,7 @@ app.get('/api/status', auth, (_req, res) => {
     bot: runtime ? { connected: runtime.connected, username: runtime.bot.username, health: runtime.bot.health, food: runtime.bot.food, position: pos ? { x: Number(pos.x.toFixed(2)), y: Number(pos.y.toFixed(2)), z: Number(pos.z.toFixed(2)) } : null } : { connected: false },
     chat: runtime?.chat.getState() || null,
     aiEnabled: runtime?.chat.isAIEnabled() ?? config.aiEnabled,
-    viewerPort: config.viewer.port
+    viewerPath: '/viewer/'
   });
 });
 
