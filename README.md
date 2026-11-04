@@ -17,7 +17,7 @@ A female AI Minecraft companion with a shared server conversation, fixed movemen
 - Web dashboard with live status, movement controls, chat bridge, memory editor and provider settings.
 - Prismarine Viewer for the bot's world perspective, reverse-proxied through the dashboard.
 - Dashboard chat is separate from AI conversation and listens for incoming Minecraft chat for five minutes after a dashboard message.
-- Optional automatic server-plugin authentication: repeats `/register`, `/register`, then `/login` on a configurable interval.
+- Optional one-time server-plugin authentication after each connection: waits 10 seconds after spawn, then sends `/register`, `/register`, and `/login` with 5-second gaps.
 
 ## Requirements
 
@@ -61,9 +61,8 @@ For development, use `npm run dev`.
 - `MC_AUTH`: `offline` for offline-mode servers or `microsoft` for Microsoft-authenticated accounts.
 - `MC_VERSION`: defaults to `1.21.11`.
 - `MC_SERVER_PASSWORD`: password used by the server's `/register` and `/login` plugin commands. Store it only in the host's private environment-variable/secrets panel; never commit the real value.
-- `MC_AUTH_RETRY_INTERVAL`: interval in milliseconds between authentication command sequences. Defaults to 45000 (45 seconds). Keep it below 60000. Each sequence sends `/register <password>`, waits 1.5 seconds, sends `/register <password>` again, waits 1.5 seconds, then sends `/login <password>`.
 
-Lumi intentionally does not inspect authentication-plugin messages. It sends the full command sequence repeatedly, so the plugin may reply that the account is already registered or logged in. Use a dedicated bot account and a unique password.
+Lumi intentionally does not inspect authentication-plugin messages. After the bot spawns, it waits 10 seconds, sends `/register <password>`, waits 5 seconds, sends `/register <password>` again, waits another 5 seconds, then sends `/login <password>`. This sequence runs only once per connection; there are no periodic retries. If Lumi reconnects, a new connection gets one new sequence. Use a dedicated bot account and a unique password.
 
 ## Dashboard
 
