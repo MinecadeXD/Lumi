@@ -8,7 +8,7 @@ export const config = {
  minecraft: { host: process.env.MC_HOST || '127.0.0.1', port: num('MC_PORT',25565), username: process.env.MC_USERNAME || 'Lumi', auth: process.env.MC_AUTH || 'offline', version: process.env.MC_VERSION || '1.21.11' },
  serverAuth: {
   password: (process.env.MC_SERVER_PASSWORD || '').replace(/[\\r\\n]/g, ''),
-  retryInterval: num('MC_AUTH_RETRY_INTERVAL', 45000)
+  retryInterval: Math.min(59000, Math.max(10000, num('MC_AUTH_RETRY_INTERVAL', 45000)))
  },
  web: { host: process.env.WEB_HOST || '0.0.0.0', port: webPort, username: process.env.DASHBOARD_USERNAME || 'admin', password: process.env.DASHBOARD_PASSWORD || 'change-this-password' },
  // This is an internal-only listener. Public access is proxied through the dashboard port.
