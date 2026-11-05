@@ -11,7 +11,8 @@ A female AI Minecraft companion with a shared server conversation, fixed movemen
 - Multiple OpenAI-compatible AI endpoints, multiple keys and ordered fallback.
 - Provider API keys encrypted at rest with AES-256-GCM.
 - AI-generated memory suggestions require dashboard approval before becoming permanent.
-- SQLite storage for providers, memories, player context and chat logs.
+- PostgreSQL persistence for providers, memories, suggestions, chat logs and player context.
+- One-time import of an existing SQLite database when the configured DB_PATH file is present.
 - Fixed commands: `Lumi come here`, `Lumi goto X Y Z`, `Lumi follow me`, `Lumi stop`, `Lumi stay`, `Lumi jump`, `Lumi sneak`.
 - Passive by default. No autonomous wandering.
 - Web dashboard with live status, movement controls, chat bridge, memory editor and provider settings.
@@ -25,20 +26,16 @@ A female AI Minecraft companion with a shared server conversation, fixed movemen
 - A Minecraft Java server compatible with 1.21.11.
 - A hosting environment that can keep a Node.js process running.
 - One public TCP port allocation.
+- A PieGres PostgreSQL database (or another PostgreSQL service).
 - One or more API keys for OpenAI-compatible chat-completion endpoints.
 
 ## Installation
 
 1. Clone this repository.
-2. Install dependencies:
-
-   ```bash
-   npm install
-   ```
-
-3. Copy `.env.example` to `.env`.
-4. Set your Minecraft server details, dashboard credentials and (if the server requires it) `MC_SERVER_PASSWORD`.
-5. Generate a 32-byte encryption key and put its 64-character hexadecimal output in `APP_ENCRYPTION_KEY`:
+2. Install dependencies with `npm install`.
+3. Configure environment variables in your host's private environment-variable panel.
+4. Set `DATABASE_URL` to the PieGres connection string supplied by PieHost, including `sslmode=require`. Never commit or share it publicly.
+5. Generate a 32-byte encryption key and set it as `APP_ENCRYPTION_KEY`:
 
    ```bash
    openssl rand -hex 32
@@ -51,7 +48,7 @@ A female AI Minecraft companion with a shared server conversation, fixed movemen
    npm start
    ```
 
-For development, use `npm run dev`.
+PostgreSQL tables are created automatically on startup. Lumi cannot start without DATABASE_URL. Keep DATABASE_URL and APP_ENCRYPTION_KEY stable across restarts and redeployments.
 
 ## Minecraft configuration
 
@@ -60,32 +57,33 @@ For development, use `npm run dev`.
 - `MC_USERNAME`: bot username.
 - `MC_AUTH`: `offline` for offline-mode servers or `microsoft` for Microsoft-authenticated accounts.
 - `MC_VERSION`: defaults to `1.21.11`.
-- `MC_SERVER_PASSWORD`: password used by the server's `/register` and `/login` plugin commands. Store it only in the host's private environment-variable/secrets panel; never commit the real value.
+- `MC_SERVER_PASSWORD`: password used by the server's `/register` and `/login` plugin commands. Store it only in the host's private environment-variable/secrets panel.
 
 Lumi intentionally does not inspect authentication-plugin messages. After the bot spawns, it waits 10 seconds, sends `/register <password>`, waits 5 seconds, sends `/register <password>` again, waits another 5 seconds, then sends `/login <password>`. This sequence runs only once per connection; there are no periodic retries. If Lumi reconnects, a new connection gets one new sequence. Use a dedicated bot account and a unique password.
 
 ## Dashboard
 
-Open `http://YOUR_HOST:16855` (or your configured web port) and sign in with `DASHBOARD_USERNAME` and `DASHBOARD_PASSWORD`.
+Open your configured web address and sign in with `DASHBOARD_USERNAME` and `DASHBOARD_PASSWORD`.
 
-The Settings page accepts OpenAI-compatible chat completion providers. Enter the provider's base URL, model and API key. The base URL should normally be the API root, for example `https://api.openai.com/v1`; Lumi appends `/chat/completions`. Give primary providers a lower priority number than fallback providers. Add a separate entry for each key or fallback model.
+The Settings page accepts OpenAI-compatible Chat Completions providers. Enter the provider's base URL, model and API key. The base URL should normally be the API root, for example `https://api.openai.com/v1`; Lumi appends `/chat/completions`. Give primary providers a lower priority number than fallback providers. Add a separate entry for each key or fallback model.
 
-Keys are encrypted in SQLite. Keep `APP_ENCRYPTION_KEY` private and back it up securely; losing it makes stored provider keys unreadable.
+Provider API keys are encrypted in PostgreSQL using AES-256-GCM. Keep `APP_ENCRYPTION_KEY` private and back it up securely. Losing or changing it makes existing stored provider keys unreadable.
 
 ## Single-port viewer
 
 Prismarine Viewer runs on an internal-only port configured by `VIEWER_INTERNAL_PORT` (default 3001). The dashboard proxies it through `/viewer/` on the same public web port. Do not allocate a second public port.
 
-## Data
+## Data and SQLite import
 
-SQLite data is stored at `DB_PATH` (default `./data/lumi.sqlite`). Back up the database and encryption key together.
+All permanent application data is stored in PieGres PostgreSQL, so it survives PieApp restarts and redeployments. If `DB_PATH` points to an existing old SQLite database on the first start against the new PostgreSQL database, Lumi imports providers, memories, suggestions, chat logs and player context once. The original SQLite file is not deleted. The import is recorded in PostgreSQL and will not be repeated.
+
+Conversation history remains in memory and resets when Lumi restarts. Dashboard chat messages are not added to AI history.
 
 ## Notes
 
 - AI provider adapters currently use the OpenAI-compatible Chat Completions request format. Providers that do not support this format need a dedicated adapter.
-- Conversation history is held in memory and resets when Lumi restarts. Approved permanent memories persist in SQLite.
-- Dashboard chat messages are not added to AI history.
 - Movement is controlled by fixed commands or dashboard controls; AI responses cannot execute actions.
+- PieGres credentials and the encryption key must be configured in PieApp environment variables, not in source files.
 
 ## License
 

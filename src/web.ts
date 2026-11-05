@@ -4,47 +4,39 @@ import crypto from 'node:crypto';
 import path from 'node:path';
 import { Server } from 'socket.io';
 import { config } from './config';
-import { db, encryptSecret } from './database';
+import {
+  approveSuggestion, createMemory, createProvider, db, deleteMemory, deleteProvider,
+  encryptSecret, listMemories, listPendingSuggestions, listProviders, rejectSuggestion,
+  updateMemory, updateProvider
+} from './database';
 import { BotRuntime } from './bot';
 
 const app = express();
 const server = http.createServer(app);
 const httpProxy = require('http-proxy');
-const viewerProxy = httpProxy.createProxyServer({
-  target: 'http://127.0.0.1:' + config.viewer.port,
-  ws: true,
-  changeOrigin: true
-});
+const viewerProxy = httpProxy.createProxyServer({ target: 'http://127.0.0.1:' + config.viewer.port, ws: true, changeOrigin: true });
 viewerProxy.on('error', (_error: Error, _req: Request, res: any) => {
   if (res && typeof res.writeHead === 'function') {
     if (!res.headersSent) res.writeHead(502);
     res.end('Viewer is starting or unavailable.');
-  } else if (res && typeof res.destroy === 'function') {
-    res.destroy();
-  }
+  } else if (res && typeof res.destroy === 'function') res.destroy();
 });
-
 app.use(express.json({ limit: '64kb' }));
-
 let runtime: BotRuntime | null = null;
-// Signed, self-contained sessions work across process restarts and multiple app instances.
-// Keep DASHBOARD_PASSWORD and APP_ENCRYPTION_KEY identical across all instances.
 const sessionSecret = crypto.createHash('sha256').update(config.web.password + ':' + config.encryptionKey).digest();
 const SESSION_MAX_AGE_SECONDS = 7 * 24 * 60 * 60;
 function token(): string {
   const id = crypto.randomBytes(32).toString('hex');
   const expires = Math.floor(Date.now() / 1000) + SESSION_MAX_AGE_SECONDS;
   const payload = id + '.' + expires;
-  const signature = crypto.createHmac('sha256', sessionSecret).update(payload).digest('hex');
-  return payload + '.' + signature;
+  return payload + '.' + crypto.createHmac('sha256', sessionSecret).update(payload).digest('hex');
 }
 function valid(value: string): boolean {
   const parts = value.split('.');
   if (parts.length !== 3 || !/^[a-f0-9]{64}$/i.test(parts[0]) || !/^\d+$/.test(parts[1]) || !/^[a-f0-9]{64}$/i.test(parts[2])) return false;
   const expires = Number(parts[1]);
   if (!Number.isSafeInteger(expires) || expires <= Math.floor(Date.now() / 1000)) return false;
-  const payload = parts[0] + '.' + parts[1];
-  const expected = crypto.createHmac('sha256', sessionSecret).update(payload).digest();
+  const expected = crypto.createHmac('sha256', sessionSecret).update(parts[0] + '.' + parts[1]).digest();
   const supplied = Buffer.from(parts[2], 'hex');
   return supplied.length === expected.length && crypto.timingSafeEqual(supplied, expected);
 }
@@ -56,25 +48,13 @@ function auth(req: Request, res: Response, next: NextFunction): void {
   if (!valid(requestToken(req))) { res.status(401).json({ error: 'Authentication required.' }); return; }
   next();
 }
-
-// Viewer HTTP requests share the dashboard's authenticated session.
-app.use('/viewer', auth, (req, res) => {
-  req.url = req.originalUrl;
-  viewerProxy.web(req, res);
-});
+app.use('/viewer', auth, (req, res) => { req.url = req.originalUrl; viewerProxy.web(req, res); });
 app.use(express.static(path.join(process.cwd(), 'public')));
-
-// Attach Socket.IO after the proxy upgrade listener and leave unrelated
-// WebSocket paths available for the viewer's own Socket.IO server.
 server.on('upgrade', (req, socket, head) => {
   if (!req.url || !(req.url === '/viewer' || req.url.startsWith('/viewer/'))) return;
   const match = (req.headers.cookie || '').match(/(?:^|;\s*)lumi_session=([^;]+)/);
   const value = match ? decodeURIComponent(match[1]) : '';
-  if (!valid(value)) {
-    socket.write('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n');
-    socket.destroy();
-    return;
-  }
+  if (!valid(value)) { socket.write('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n'); socket.destroy(); return; }
   viewerProxy.ws(req, socket, head);
 });
 const io = new Server(server, { destroyUpgrade: false });
@@ -83,8 +63,7 @@ app.post('/api/login', (req, res) => {
   if (String(req.body?.username || '') !== config.web.username || String(req.body?.password || '') !== config.web.password) {
     res.status(401).json({ error: 'Incorrect username or password.' }); return;
   }
-  const value = token();
-  res.setHeader('Set-Cookie', 'lumi_session=' + encodeURIComponent(value) + '; HttpOnly; SameSite=Lax; Path=/; Max-Age=' + SESSION_MAX_AGE_SECONDS);
+  res.setHeader('Set-Cookie', 'lumi_session=' + encodeURIComponent(token()) + '; HttpOnly; SameSite=Lax; Path=/; Max-Age=' + SESSION_MAX_AGE_SECONDS);
   res.json({ success: true });
 });
 app.post('/api/logout', auth, (_req, res) => {
@@ -95,72 +74,53 @@ app.get('/api/status', auth, (_req, res) => {
   const pos = runtime?.bot.entity?.position;
   res.json({
     bot: runtime ? { connected: runtime.connected, username: runtime.bot.username, health: runtime.bot.health, food: runtime.bot.food, position: pos ? { x: Number(pos.x.toFixed(2)), y: Number(pos.y.toFixed(2)), z: Number(pos.z.toFixed(2)) } : null } : { connected: false },
-    chat: runtime?.chat.getState() || null,
-    aiEnabled: runtime?.chat.isAIEnabled() ?? config.aiEnabled,
-    viewerPath: '/viewer/'
+    chat: runtime?.chat.getState() || null, aiEnabled: runtime?.chat.isAIEnabled() ?? config.aiEnabled, viewerPath: '/viewer/'
   });
 });
 
-app.get('/api/providers', auth, (_req, res) => {
-  res.json(db.prepare('SELECT id,name,base_url,model,enabled,priority,created_at FROM providers ORDER BY priority,id').all());
-});
-app.post('/api/providers', auth, (req, res) => {
-  const name = String(req.body?.name || '').trim().slice(0, 60);
+app.get('/api/providers', auth, async (_req, res) => res.json(await listProviders()));
+app.post('/api/providers', auth, async (req, res) => {
+  const name = String(req.body?.name || '').trim().slice(0,60);
   const baseUrl = String(req.body?.baseUrl || '').trim();
-  const model = String(req.body?.model || '').trim().slice(0, 120);
+  const model = String(req.body?.model || '').trim().slice(0,120);
   const apiKey = String(req.body?.apiKey || '').trim();
-  const priority = Number(req.body?.priority || 100);
+  const rawPriority = Number(req.body?.priority ?? 100);
   if (!name || !baseUrl.startsWith('https://') || !model || !apiKey) {
     res.status(400).json({ error: 'Name, HTTPS base URL, model and API key are required.' }); return;
   }
-  try {
-    const result = db.prepare('INSERT INTO providers(name,base_url,model,encrypted_key,priority) VALUES(?,?,?,?,?)')
-      .run(name, baseUrl, model, encryptSecret(apiKey), Number.isFinite(priority) ? priority : 100);
-    res.json({ success: true, id: result.lastInsertRowid });
-  } catch (error) { res.status(400).json({ error: error instanceof Error ? error.message : String(error) }); }
+  const id = await createProvider({ name, baseUrl, model, encryptedKey: encryptSecret(apiKey), priority: Number.isFinite(rawPriority) ? rawPriority : 100 });
+  res.json({ success: true, id });
 });
-app.patch('/api/providers/:id', auth, (req, res) => {
+app.patch('/api/providers/:id', auth, async (req, res) => {
   const id = Number(req.params.id);
-  if (req.body?.enabled !== undefined) db.prepare('UPDATE providers SET enabled=? WHERE id=?').run(req.body.enabled ? 1 : 0, id);
-  if (req.body?.priority !== undefined) db.prepare('UPDATE providers SET priority=? WHERE id=?').run(Number(req.body.priority) || 100, id);
+  if (!Number.isSafeInteger(id) || id < 1) { res.status(400).json({ error: 'Invalid provider ID.' }); return; }
+  const enabled = req.body?.enabled === undefined ? undefined : Boolean(req.body.enabled);
+  const priorityValue = req.body?.priority === undefined ? undefined : Number(req.body.priority);
+  await updateProvider(id, enabled, priorityValue !== undefined && Number.isFinite(priorityValue) ? priorityValue : undefined);
   res.json({ success: true });
 });
-app.delete('/api/providers/:id', auth, (req, res) => {
-  db.prepare('DELETE FROM providers WHERE id=?').run(Number(req.params.id));
-  res.json({ success: true });
-});
+app.delete('/api/providers/:id', auth, async (req, res) => { await deleteProvider(Number(req.params.id)); res.json({ success: true }); });
 
-app.get('/api/memories', auth, (_req, res) => res.json(db.prepare('SELECT * FROM memories ORDER BY id DESC').all()));
-app.post('/api/memories', auth, (req, res) => {
-  const content = String(req.body?.content || '').trim().slice(0, 1000);
+app.get('/api/memories', auth, async (_req, res) => res.json(await listMemories()));
+app.post('/api/memories', auth, async (req, res) => {
+  const content = String(req.body?.content || '').trim().slice(0,1000);
   if (!content) { res.status(400).json({ error: 'Memory cannot be empty.' }); return; }
-  const result = db.prepare('INSERT INTO memories(content) VALUES(?)').run(content);
-  res.json({ success: true, id: result.lastInsertRowid });
+  res.json({ success: true, id: await createMemory(content) });
 });
-app.patch('/api/memories/:id', auth, (req, res) => {
-  const content = String(req.body?.content || '').trim().slice(0, 1000);
+app.patch('/api/memories/:id', auth, async (req, res) => {
+  const content = String(req.body?.content || '').trim().slice(0,1000);
   if (!content) { res.status(400).json({ error: 'Memory cannot be empty.' }); return; }
-  db.prepare('UPDATE memories SET content=?,updated_at=CURRENT_TIMESTAMP WHERE id=?').run(content, Number(req.params.id));
+  await updateMemory(Number(req.params.id), content); res.json({ success: true });
+});
+app.delete('/api/memories/:id', auth, async (req, res) => { await deleteMemory(Number(req.params.id)); res.json({ success: true }); });
+app.get('/api/suggestions', auth, async (_req, res) => res.json(await listPendingSuggestions()));
+app.post('/api/suggestions/:id/approve', auth, async (req, res) => {
+  const replacement = req.body?.content === undefined ? undefined : String(req.body.content).trim().slice(0,1000);
+  const ok = await approveSuggestion(Number(req.params.id), replacement);
+  if (!ok) { res.status(404).json({ error: 'Suggestion not found or content is empty.' }); return; }
   res.json({ success: true });
 });
-app.delete('/api/memories/:id', auth, (req, res) => {
-  db.prepare('DELETE FROM memories WHERE id=?').run(Number(req.params.id));
-  res.json({ success: true });
-});
-app.get('/api/suggestions', auth, (_req, res) => res.json(db.prepare("SELECT * FROM memory_suggestions WHERE status='pending' ORDER BY id DESC").all()));
-app.post('/api/suggestions/:id/approve', auth, (req, res) => {
-  const id = Number(req.params.id);
-  const row = db.prepare("SELECT content FROM memory_suggestions WHERE id=? AND status='pending'").get(id) as { content: string } | undefined;
-  if (!row) { res.status(404).json({ error: 'Suggestion not found.' }); return; }
-  const content = String(req.body?.content || row.content).trim().slice(0, 1000);
-  db.prepare('INSERT INTO memories(content) VALUES(?)').run(content);
-  db.prepare("UPDATE memory_suggestions SET status='approved' WHERE id=?").run(id);
-  res.json({ success: true });
-});
-app.post('/api/suggestions/:id/reject', auth, (req, res) => {
-  db.prepare("UPDATE memory_suggestions SET status='rejected' WHERE id=?").run(Number(req.params.id));
-  res.json({ success: true });
-});
+app.post('/api/suggestions/:id/reject', auth, async (req, res) => { await rejectSuggestion(Number(req.params.id)); res.json({ success: true }); });
 
 io.use((socket, next) => {
   const match = (socket.handshake.headers.cookie || '').match(/(?:^|;\s*)lumi_session=([^;]+)/);
@@ -172,18 +132,16 @@ io.on('connection', socket => {
   const pos = runtime.bot.entity?.position;
   socket.emit('status', { connected: runtime.connected, username: runtime.bot.username, health: runtime.bot.health, food: runtime.bot.food, position: pos ? { x: Number(pos.x.toFixed(2)), y: Number(pos.y.toFixed(2)), z: Number(pos.z.toFixed(2)) } : null });
   socket.emit('aiState', { enabled: runtime.chat.isAIEnabled() });
-  socket.on('control', (data: any) => {
-    if (typeof data?.key === 'string' && typeof data?.pressed === 'boolean') runtime?.movement.setControl(data.key, data.pressed);
-  });
+  socket.on('control', (data: any) => { if (typeof data?.key === 'string' && typeof data?.pressed === 'boolean') runtime?.movement.setControl(data.key, data.pressed); });
   socket.on('stop', () => runtime?.movement.stop());
   socket.on('jump', () => runtime?.movement.jump());
-  socket.on('webChat', (data: any) => {
-    const message = String(data?.message || '').trim();
-    if (message && message.length <= 256) runtime?.chat.sendFromDashboard(message);
-  });
+  socket.on('webChat', (data: any) => { const message = String(data?.message || '').trim(); if (message && message.length <= 256) runtime?.chat.sendFromDashboard(message); });
   socket.on('aiToggle', (data: any) => runtime?.chat.setAIEnabled(Boolean(data?.enabled)));
 });
-
+app.use((error: any, _req: Request, res: Response, _next: NextFunction) => {
+  console.error('[Web API]', error instanceof Error ? error.message : error);
+  if (!res.headersSent) res.status(500).json({ error: 'The request failed. Check the Lumi server logs.' });
+});
 export function attachRuntime(value: BotRuntime): void { runtime = value; }
 export function broadcast(event: string, data: any): void { io.emit(event, data); }
 export function startWebServer(): Promise<void> {
