@@ -23,6 +23,11 @@ export function getDatabaseStatus() {
   return { available: databaseReady, error: databaseReady ? null : databaseLastError || 'Database is not connected yet.' };
 }
 
+export function markDatabaseUnavailable(error: unknown): void {
+  databaseReady = false;
+  databaseLastError = error instanceof Error ? error.message : String(error);
+}
+
 export async function initDatabase(): Promise<void> {
   if (!config.databaseUrl) throw new Error('DATABASE_URL is not configured in PieApp.');
   await db.query(`
