@@ -71,11 +71,28 @@ app.post('/api/logout', auth, (_req, res) => {
   res.json({ success: true });
 });
 app.get('/api/status', auth, (_req, res) => {
-  const pos = runtime?.bot.entity?.position;
   res.json({
-    bot: runtime ? { connected: runtime.connected, username: runtime.bot.username, health: runtime.bot.health, food: runtime.bot.food, position: pos ? { x: Number(pos.x.toFixed(2)), y: Number(pos.y.toFixed(2)), z: Number(pos.z.toFixed(2)) } : null } : { connected: false },
-    chat: runtime?.chat.getState() || null, aiEnabled: runtime?.chat.isAIEnabled() ?? config.aiEnabled, viewerPath: '/viewer/'
+    bot: runtime ? runtime.snapshot() : { connected: false, state: 'stopped', username: config.minecraft.username, health: null, food: null, position: null },
+    chat: runtime?.chat?.getState() || null,
+    aiEnabled: runtime?.chat?.isAIEnabled() ?? config.aiEnabled,
+    viewerPath: '/viewer/'
   });
+});
+
+app.post('/api/bot/start', auth, async (_req, res) => {
+  if (!runtime) { res.status(503).json({ error: 'Bot runtime is not ready.' }); return; }
+  await runtime.start();
+  res.json({ success: true, bot: runtime.snapshot() });
+});
+app.post('/api/bot/stop', auth, async (_req, res) => {
+  if (!runtime) { res.status(503).json({ error: 'Bot runtime is not ready.' }); return; }
+  await runtime.stop();
+  res.json({ success: true, bot: runtime.snapshot() });
+});
+app.post('/api/bot/rejoin', auth, async (_req, res) => {
+  if (!runtime) { res.status(503).json({ error: 'Bot runtime is not ready.' }); return; }
+  await runtime.rejoin();
+  res.json({ success: true, bot: runtime.snapshot() });
 });
 
 app.get('/api/providers', auth, async (_req, res) => res.json(await listProviders()));
@@ -129,14 +146,20 @@ io.use((socket, next) => {
 });
 io.on('connection', socket => {
   if (!runtime) return;
-  const pos = runtime.bot.entity?.position;
-  socket.emit('status', { connected: runtime.connected, username: runtime.bot.username, health: runtime.bot.health, food: runtime.bot.food, position: pos ? { x: Number(pos.x.toFixed(2)), y: Number(pos.y.toFixed(2)), z: Number(pos.z.toFixed(2)) } : null });
-  socket.emit('aiState', { enabled: runtime.chat.isAIEnabled() });
-  socket.on('control', (data: any) => { if (typeof data?.key === 'string' && typeof data?.pressed === 'boolean') runtime?.movement.setControl(data.key, data.pressed); });
-  socket.on('stop', () => runtime?.movement.stop());
-  socket.on('jump', () => runtime?.movement.jump());
-  socket.on('webChat', (data: any) => { const message = String(data?.message || '').trim(); if (message && message.length <= 256) runtime?.chat.sendFromDashboard(message); });
-  socket.on('aiToggle', (data: any) => runtime?.chat.setAIEnabled(Boolean(data?.enabled)));
+  socket.emit('status', runtime.snapshot());
+  socket.emit('aiState', { enabled: runtime.chat?.isAIEnabled() ?? config.aiEnabled });
+  socket.on('control', (data: any) => {
+    if (typeof data?.key === 'string' && typeof data?.pressed === 'boolean') runtime?.movement?.setControl(data.key, data.pressed);
+  });
+  socket.on('stop', () => runtime?.movement?.stop());
+  socket.on('jump', () => runtime?.movement?.jump());
+  socket.on('webChat', (data: any) => {
+    const message = String(data?.message || '').trim();
+    if (!message || message.length > 256) return;
+    if (!runtime?.chat || !runtime.connected) { socket.emit('controlError', { message: 'Lumi is not connected to Minecraft.' }); return; }
+    runtime.chat.sendFromDashboard(message);
+  });
+  socket.on('aiToggle', (data: any) => runtime?.chat?.setAIEnabled(Boolean(data?.enabled)));
 });
 app.use((error: any, _req: Request, res: Response, _next: NextFunction) => {
   console.error('[Web API]', error instanceof Error ? error.message : error);

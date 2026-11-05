@@ -4,25 +4,46 @@ import { createBotRuntime } from './bot';
 import { attachRuntime, broadcast, startWebServer } from './web';
 
 async function main(): Promise<void> {
-  console.log('Starting ' + config.botName + '...');
+  console.log('Starting ' + config.botName + ' dashboard...');
   await initDatabase();
   await startWebServer();
-  const runtime = createBotRuntime((event, payload) => broadcast(event, payload));
-  attachRuntime(runtime);
+
+  let viewerAvailable = false;
+  let viewer: any = null;
   try {
-    const viewer = require('prismarine-viewer');
-    if (typeof viewer.mineflayer === 'function') {
-      runtime.bot.once('spawn', () => {
-        try {
-          viewer.mineflayer(runtime.bot, { port: config.viewer.port, prefix: '/viewer', firstPerson: false, viewDistance: config.viewer.distance });
-          console.log('[Viewer] Internal viewer started; public route is /viewer/');
-        } catch (error) { console.error('[Viewer]', error); }
-      });
-    } else console.warn('[Viewer] Mineflayer adapter not found in prismarine-viewer.');
-  } catch (error) { console.error('[Viewer] Could not load viewer:', error); }
+    viewer = require('prismarine-viewer');
+    viewerAvailable = typeof viewer.mineflayer === 'function';
+    if (!viewerAvailable) console.warn('[Viewer] Mineflayer adapter not found in prismarine-viewer.');
+  } catch (error) {
+    console.error('[Viewer] Could not load viewer:', error);
+  }
+
+  const runtime = createBotRuntime(
+    (event, payload) => broadcast(event, payload),
+    bot => {
+      if (!viewerAvailable) return;
+      try {
+        viewer.mineflayer(bot, {
+          port: config.viewer.port,
+          prefix: '/viewer',
+          firstPerson: false,
+          viewDistance: config.viewer.distance
+        });
+        console.log('[Viewer] Internal viewer started; public route is /viewer/');
+      } catch (error) {
+        console.error('[Viewer] Could not start viewer:', error);
+      }
+    }
+  );
+  attachRuntime(runtime);
+  console.log('[Minecraft] Bot is stopped. Start it from the dashboard.');
+
+  let shuttingDown = false;
   const shutdown = async () => {
+    if (shuttingDown) return;
+    shuttingDown = true;
     console.log('Stopping Lumi...');
-    try { runtime.bot.quit('Shutdown'); } catch {}
+    try { await runtime.stop(); } catch {}
     try { await db.end(); } catch {}
     process.exit(0);
   };
