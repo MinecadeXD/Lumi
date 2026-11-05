@@ -3,18 +3,28 @@ import crypto from 'node:crypto';
 import { Pool, PoolClient } from 'pg';
 import { config } from './config';
 
-if (!config.databaseUrl) throw new Error('DATABASE_URL is required. Configure the PieGres connection string in PieApp environment variables.');
+let databaseReady = false;
+let databaseLastError: string | null = null;
 
 export const db = new Pool({
-  connectionString: config.databaseUrl,
+  connectionString: config.databaseUrl || undefined,
   ssl: { rejectUnauthorized: false },
-  max: 5,
+  max: 3,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 10000
 });
-db.on('error', error => console.error('[PostgreSQL] Idle client error:', error.message));
+db.on('error', error => {
+  databaseReady = false;
+  databaseLastError = error.message;
+  console.error('[PostgreSQL] Pool client error:', error.message);
+});
+
+export function getDatabaseStatus() {
+  return { available: databaseReady, error: databaseReady ? null : databaseLastError || 'Database is not connected yet.' };
+}
 
 export async function initDatabase(): Promise<void> {
+  if (!config.databaseUrl) throw new Error('DATABASE_URL is not configured in PieApp.');
   await db.query(`
     CREATE TABLE IF NOT EXISTS providers (
       id SERIAL PRIMARY KEY, name TEXT NOT NULL, base_url TEXT NOT NULL, model TEXT NOT NULL,
@@ -42,6 +52,8 @@ export async function initDatabase(): Promise<void> {
     CREATE INDEX IF NOT EXISTS memory_suggestions_pending_idx ON memory_suggestions(status,id DESC);
   `);
   await importExistingSqlite();
+  databaseReady = true;
+  databaseLastError = null;
   console.log('[PostgreSQL] Database ready.');
 }
 
