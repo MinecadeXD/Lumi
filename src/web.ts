@@ -165,7 +165,11 @@ io.on('connection', socket => {
 });
 app.use((error: any, _req: Request, res: Response, _next: NextFunction) => {
   console.error('[Web API]', error instanceof Error ? error.message : error);
-  if (!res.headersSent) res.status(500).json({ error: 'The request failed. Check the Lumi server logs.' });
+  if (!res.headersSent) {
+    const database = getDatabaseStatus();
+    const unavailable = !database.available;
+    res.status(unavailable ? 503 : 500).json({ error: unavailable ? 'Database is temporarily unavailable. Retry shortly.' : 'The request failed. Check the Lumi server logs.', database });
+  }
 });
 export function attachRuntime(value: BotRuntime): void { runtime = value; }
 export function broadcast(event: string, data: any): void { io.emit(event, data); }
