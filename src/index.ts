@@ -1,12 +1,34 @@
 import { config } from './config';
-import { initDatabase, db } from './database';
+import { initDatabase, db, getDatabaseStatus } from './database';
 import { createBotRuntime } from './bot';
 import { attachRuntime, broadcast, startWebServer } from './web';
 
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+async function maintainDatabase(): Promise<void> {
+  let delay = 5000;
+  while (true) {
+    try {
+      if (!getDatabaseStatus().available) {
+        console.log('[PostgreSQL] Connecting to database...');
+        await initDatabase();
+        delay = 5000;
+      } else {
+        await db.query('SELECT 1');
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error('[PostgreSQL] Connection/health check failed:', message);
+      await sleep(delay);
+      delay = Math.min(delay * 2, 60000);
+      continue;
+    }
+    await sleep(30000);
+  }
+}
+
 async function main(): Promise<void> {
   console.log('Starting ' + config.botName + ' dashboard...');
-  await initDatabase();
-  await startWebServer();
 
   let viewerAvailable = false;
   let viewer: any = null;
@@ -36,7 +58,10 @@ async function main(): Promise<void> {
     }
   );
   attachRuntime(runtime);
+
+  await startWebServer();
   console.log('[Minecraft] Bot is stopped. Start it from the dashboard.');
+  void maintainDatabase();
 
   let shuttingDown = false;
   const shutdown = async () => {
