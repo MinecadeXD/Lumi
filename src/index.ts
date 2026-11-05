@@ -1,5 +1,5 @@
 import { config } from './config';
-import { initDatabase, db, getDatabaseStatus } from './database';
+import { initDatabase, db, getDatabaseStatus, markDatabaseUnavailable } from './database';
 import { createBotRuntime } from './bot';
 import { attachRuntime, broadcast, startWebServer } from './web';
 
@@ -18,6 +18,7 @@ async function maintainDatabase(): Promise<void> {
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      markDatabaseUnavailable(error);
       console.error('[PostgreSQL] Connection/health check failed:', message);
       await sleep(delay);
       delay = Math.min(delay * 2, 60000);
