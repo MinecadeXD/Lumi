@@ -6,7 +6,7 @@ import { Server } from 'socket.io';
 import { config } from './config';
 import {
   approveSuggestion, createMemory, createProvider, db, deleteMemory, deleteProvider,
-  encryptSecret, listMemories, listPendingSuggestions, listProviders, rejectSuggestion,
+  encryptSecret, getDatabaseStatus, listMemories, listPendingSuggestions, listProviders, rejectSuggestion,
   updateMemory, updateProvider
 } from './database';
 import { BotRuntime } from './bot';
@@ -70,6 +70,8 @@ app.post('/api/logout', auth, (_req, res) => {
   res.setHeader('Set-Cookie', 'lumi_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0');
   res.json({ success: true });
 });
+app.get('/api/system/status', auth, (_req, res) => res.json({ dashboard: 'online', database: getDatabaseStatus() }));
+
 app.get('/api/status', auth, (_req, res) => {
   res.json({
     bot: runtime ? runtime.snapshot() : { connected: false, state: 'stopped', username: config.minecraft.username, health: null, food: null, position: null },
