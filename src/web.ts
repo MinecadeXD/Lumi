@@ -27,17 +27,25 @@ viewerProxy.on('error', (_error: Error, _req: Request, res: any) => {
 app.use(express.json({ limit: '64kb' }));
 
 let runtime: BotRuntime | null = null;
-const sessions = new Set<string>();
+// Signed, self-contained sessions work across process restarts and multiple app instances.
+// Keep DASHBOARD_PASSWORD and APP_ENCRYPTION_KEY identical across all instances.
 const sessionSecret = crypto.createHash('sha256').update(config.web.password + ':' + config.encryptionKey).digest();
+const SESSION_MAX_AGE_SECONDS = 7 * 24 * 60 * 60;
 function token(): string {
   const id = crypto.randomBytes(32).toString('hex');
-  return id + '.' + crypto.createHmac('sha256', sessionSecret).update(id).digest('hex');
+  const expires = Math.floor(Date.now() / 1000) + SESSION_MAX_AGE_SECONDS;
+  const payload = id + '.' + expires;
+  const signature = crypto.createHmac('sha256', sessionSecret).update(payload).digest('hex');
+  return payload + '.' + signature;
 }
 function valid(value: string): boolean {
   const parts = value.split('.');
-  if (parts.length !== 2 || !sessions.has(parts[0])) return false;
-  const expected = crypto.createHmac('sha256', sessionSecret).update(parts[0]).digest();
-  const supplied = Buffer.from(parts[1]);
+  if (parts.length !== 3 || !/^[a-f0-9]{64}$/i.test(parts[0]) || !/^\d+$/.test(parts[1]) || !/^[a-f0-9]{64}$/i.test(parts[2])) return false;
+  const expires = Number(parts[1]);
+  if (!Number.isSafeInteger(expires) || expires <= Math.floor(Date.now() / 1000)) return false;
+  const payload = parts[0] + '.' + parts[1];
+  const expected = crypto.createHmac('sha256', sessionSecret).update(payload).digest();
+  const supplied = Buffer.from(parts[2], 'hex');
   return supplied.length === expected.length && crypto.timingSafeEqual(supplied, expected);
 }
 function requestToken(req: Request): string {
@@ -76,13 +84,11 @@ app.post('/api/login', (req, res) => {
     res.status(401).json({ error: 'Incorrect username or password.' }); return;
   }
   const value = token();
-  sessions.add(value.split('.')[0]);
-  res.setHeader('Set-Cookie', 'lumi_session=' + encodeURIComponent(value) + '; HttpOnly; SameSite=Strict; Path=/; Max-Age=604800');
+  res.setHeader('Set-Cookie', 'lumi_session=' + encodeURIComponent(value) + '; HttpOnly; SameSite=Lax; Path=/; Max-Age=' + SESSION_MAX_AGE_SECONDS);
   res.json({ success: true });
 });
-app.post('/api/logout', auth, (req, res) => {
-  sessions.delete(requestToken(req).split('.')[0]);
-  res.setHeader('Set-Cookie', 'lumi_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0');
+app.post('/api/logout', auth, (_req, res) => {
+  res.setHeader('Set-Cookie', 'lumi_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0');
   res.json({ success: true });
 });
 app.get('/api/status', auth, (_req, res) => {
