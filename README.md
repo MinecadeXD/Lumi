@@ -63,7 +63,7 @@ Lumi intentionally does not inspect authentication-plugin messages. After the bo
 
 ## Dashboard
 
-Open your configured web address and sign in with `DASHBOARD_USERNAME` and `DASHBOARD_PASSWORD`.
+Open your configured web address and sign in with `DASHBOARD_USERNAME` and `DASHBOARD_PASSWORD`. The Minecraft bot does not connect automatically when Lumi starts. Use the Overview page's **Start**, **Stop**, and **Rejoin** controls to manage its connection. The dashboard and PostgreSQL-backed settings remain available while the bot is stopped.
 
 The Settings page accepts OpenAI-compatible Chat Completions providers. Enter the provider's base URL, model and API key. The base URL should normally be the API root, for example `https://api.openai.com/v1`; Lumi appends `/chat/completions`. Give primary providers a lower priority number than fallback providers. Add a separate entry for each key or fallback model.
 

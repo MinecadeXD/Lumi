@@ -15,6 +15,7 @@ $('logout').onclick=async()=>{try{await api('/api/logout',{method:'POST'});}catc
 function connect(){
  if(socket)socket.disconnect();socket=io();
  socket.on('connect_error',()=>toast('Dashboard connection lost.'));
+ socket.on('controlError',v=>toast(v.message||'Action unavailable.'));
  socket.on('status',updateStatus);socket.on('position',p=>{if(p)$('position').textContent=[p.x,p.y,p.z].join(', ');});
  socket.on('webIncoming',addMessage);
  socket.on('chat',v=>{if(v.source==='bot'||v.source==='dashboard')addMessage(v);});
@@ -32,7 +33,6 @@ document.querySelectorAll('[data-control]').forEach(button=>{const key=button.da
 document.querySelector('[data-jump]').onclick=()=>socket?.emit('jump');$('stop').onclick=()=>socket?.emit('stop');
 async function botAction(action){for(const id of ['botStart','botStop','botRejoin'])$(id).disabled=true;try{const result=await api('/api/bot/'+action,{method:'POST'});updateStatus(result.bot);toast(action==='start'?'Lumi is connecting.':action==='stop'?'Lumi stopped.':'Rejoin requested.');}catch(err){toast(err.message);try{const v=await api('/api/status');updateStatus(v.bot);}catch{}}}
 $('botStart').onclick=()=>botAction('start');$('botStop').onclick=()=>botAction('stop');$('botRejoin').onclick=()=>botAction('rejoin');
-socket?.on('controlError',v=>toast(v.message||'Action unavailable.'));
 
 document.querySelectorAll('nav button').forEach(button=>button.onclick=()=>{document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active',b===button));document.querySelectorAll('.page').forEach(p=>p.classList.add('hidden'));$(button.dataset.page).classList.remove('hidden');$('heading').textContent=button.textContent.trim();if(button.dataset.page==='viewer'&&!$('viewerFrame').src)$('viewerFrame').src='/viewer/';if(button.dataset.page==='memory'){loadMemories();loadSuggestions();}if(button.dataset.page==='settings')loadProviders();});
 $('memoryForm').onsubmit=async e=>{e.preventDefault();try{await api('/api/memories',{method:'POST',body:JSON.stringify({content:$('memoryInput').value})});$('memoryInput').value='';loadMemories();toast('Memory saved.');}catch(err){toast(err.message);}};
