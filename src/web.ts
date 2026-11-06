@@ -210,6 +210,9 @@ io.on('connection', socket => {
     const drop = data?.stack ? bot.tossStack(held) : bot.toss(held.type, held.metadata, 1);
     void drop.then(sendInventory).catch(error => socket.emit('controlError', { message: error instanceof Error ? error.message : 'Could not drop item.' }));
   });
+  socket.on('disconnect', () => {
+    if ((runtime?.chat?.getMode() ?? getDefaultMode()) === 'manual') runtime?.movement?.stop();
+  });
   socket.on('inventoryRequest', sendInventory);
   socket.on('inventoryClick', (data: any) => {
     if ((runtime?.chat?.getMode() ?? getDefaultMode()) !== 'manual') return;
