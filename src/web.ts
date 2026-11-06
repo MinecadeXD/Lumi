@@ -168,10 +168,7 @@ io.on('connection', socket => {
     const slots = (bot.inventory?.slots || []).map((item: any) => item ? { name: item.name, count: item.count } : null);
     socket.emit('inventory', { slots, selected: bot.quickBarSlot ?? 0 });
   };
-  const inventory = runtime.bot?.inventory;
-  inventory?.on('updateSlot', sendInventory);
   sendInventory();
-  socket.on('disconnect', () => inventory?.off('updateSlot', sendInventory));
   socket.on('control', (data: any) => {
     if ((runtime?.chat?.getMode() ?? getDefaultMode()) !== 'manual') { socket.emit('controlError', { message: 'Website controls are disabled in Automatic mode.' }); return; }
     if (typeof data?.key === 'string' && typeof data?.pressed === 'boolean') runtime?.movement?.setControl(data.key, data.pressed);
