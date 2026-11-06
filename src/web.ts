@@ -196,18 +196,20 @@ io.on('connection', socket => {
     runtime.chat.sendFromDashboard(message);
   });
   socket.on('hotbar', (data: any) => {
-    if (runtime?.chat?.getMode() !== 'manual') return;
+    if ((runtime?.chat?.getMode() ?? getDefaultMode()) !== 'manual') return;
     const slot = Number(data?.slot);
     const bot = runtime?.bot;
     if (!Number.isInteger(slot) || slot < 0 || slot > 8 || !bot) return;
     try { bot.setQuickBarSlot(slot); sendInventory(); }
     catch (error) { socket.emit('controlError', { message: error instanceof Error ? error.message : 'Could not select hotbar slot.' }); }
   });
-  socket.on('dropHeld', () => {
-    if (runtime?.chat?.getMode() !== 'manual') return;
+  socket.on('dropHeld', (data: any) => {
+    if ((runtime?.chat?.getMode() ?? getDefaultMode()) !== 'manual') return;
     const bot = runtime?.bot;
-    if (!bot?.heldItem) return;
-    void bot.tossStack(bot.heldItem).then(sendInventory).catch(error => socket.emit('controlError', { message: error instanceof Error ? error.message : 'Could not drop item.' }));
+    const held = bot?.heldItem;
+    if (!bot || !held) return;
+    const drop = data?.stack ? bot.tossStack(held) : bot.toss(held.type, held.metadata, 1);
+    void drop.then(sendInventory).catch(error => socket.emit('controlError', { message: error instanceof Error ? error.message : 'Could not drop item.' }));
   });
   socket.on('inventoryRequest', sendInventory);
   socket.on('inventoryClick', (data: any) => {
@@ -217,7 +219,6 @@ io.on('connection', socket => {
     if (!Number.isInteger(slot) || slot < 9 || slot > 44 || !bot) return;
     void bot.clickWindow(slot, 0, 0).then(sendInventory).catch(error => socket.emit('controlError', { message: error instanceof Error ? error.message : 'Inventory action failed.' }));
   });
-  socket.on('aiToggle', (data: any) => runtime?.chat?.setAIEnabled(Boolean(data?.enabled)));
 });
 app.use((error: any, _req: Request, res: Response, _next: NextFunction) => {
   console.error('[Web API]', error instanceof Error ? error.message : error);
