@@ -135,11 +135,18 @@ export function createBotRuntime(emit: Emitter, onSpawn?: SpawnHandler): BotRunt
       }
 
       bot = current;
+      let inventoryListenerAttached = false;
       const publishInventory = () => emit('inventory', {
-        slots: current.inventory.slots.map(item => item ? { name: item.name, count: item.count } : null),
+        slots: (current.inventory?.slots || []).map(item => item ? { name: item.name, count: item.count } : null),
         selected: current.quickBarSlot ?? 0
       });
-      current.inventory.on('updateSlot', publishInventory);
+      const attachInventoryListener = () => {
+        const inventory = current.inventory;
+        if (inventoryListenerAttached || !inventory || typeof inventory.on !== 'function') return;
+        inventoryListenerAttached = true;
+        inventory.on('updateSlot', publishInventory);
+        publishInventory();
+      };
       movement = new MovementController(current);
       chat = new ChatManager(current, movement, emit);
       let authSequenceStarted = false;
@@ -167,12 +174,14 @@ export function createBotRuntime(emit: Emitter, onSpawn?: SpawnHandler): BotRunt
 
       current.on('login', () => {
         if (bot !== current) return;
+        attachInventoryListener();
         console.log('[Minecraft] Logged in as ' + current.username);
         publish();
         if (!config.serverAuth.password) console.warn('[Minecraft Auth] MC_SERVER_PASSWORD is not configured; automatic authentication is disabled.');
       });
       current.on('spawn', () => {
         if (bot !== current) return;
+        attachInventoryListener();
         deathReconnectPending = false;
         if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
         state = 'online';
