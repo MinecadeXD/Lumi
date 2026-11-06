@@ -76,9 +76,17 @@ app.get('/api/status', auth, (_req, res) => {
   res.json({
     bot: runtime ? runtime.snapshot() : { connected: false, state: 'stopped', username: config.minecraft.username, health: null, food: null, position: null },
     chat: runtime?.chat?.getState() || null,
-    aiEnabled: runtime?.chat?.isAIEnabled() ?? config.aiEnabled,
+    aiEnabled: runtime?.chat?.isAIEnabled() ?? false,
+    mode: runtime?.chat?.getMode() ?? 'manual',
     viewerPath: '/viewer/'
   });
+});
+
+app.post('/api/mode', auth, (req, res) => {
+  const mode = req.body?.mode;
+  if (mode !== 'manual' && mode !== 'automatic') { res.status(400).json({ error: 'Mode must be manual or automatic.' }); return; }
+  runtime?.chat?.setMode(mode);
+  res.json({ success: true, mode, aiEnabled: mode === 'automatic' });
 });
 
 app.post('/api/bot/start', auth, async (_req, res) => {
@@ -149,12 +157,20 @@ io.use((socket, next) => {
 io.on('connection', socket => {
   if (!runtime) return;
   socket.emit('status', runtime.snapshot());
-  socket.emit('aiState', { enabled: runtime.chat?.isAIEnabled() ?? config.aiEnabled });
+  socket.emit('aiState', { enabled: runtime.chat?.isAIEnabled() ?? false, mode: runtime.chat?.getMode() ?? 'manual' });
+  socket.emit('mode', { mode: runtime.chat?.getMode() ?? 'manual' });
   socket.on('control', (data: any) => {
+    if (runtime?.chat?.getMode() !== 'manual') { socket.emit('controlError', { message: 'Website controls are disabled in Automatic mode.' }); return; }
     if (typeof data?.key === 'string' && typeof data?.pressed === 'boolean') runtime?.movement?.setControl(data.key, data.pressed);
   });
-  socket.on('stop', () => runtime?.movement?.stop());
-  socket.on('jump', () => runtime?.movement?.jump());
+  socket.on('stop', () => {
+    if (runtime?.chat?.getMode() !== 'manual') { socket.emit('controlError', { message: 'Website controls are disabled in Automatic mode.' }); return; }
+    runtime?.movement?.stop();
+  });
+  socket.on('jump', () => {
+    if (runtime?.chat?.getMode() !== 'manual') { socket.emit('controlError', { message: 'Website controls are disabled in Automatic mode.' }); return; }
+    runtime?.movement?.jump();
+  });
   socket.on('webChat', (data: any) => {
     const message = String(data?.message || '').trim();
     if (!message || message.length > 256) return;
