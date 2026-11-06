@@ -46,7 +46,6 @@ async function main(): Promise<void> {
     (event, payload) => broadcast(event, payload),
     bot => {
       if (!viewerAvailable || viewerBots.has(bot)) return;
-      viewerBots.add(bot);
       try {
         viewer.mineflayer(bot, {
           port: config.viewer.port,
