@@ -1,5 +1,6 @@
 const $ = id => document.getElementById(id);
 let socket;
+let currentMode='manual';
 function toast(message) { const el=$('toast'); el.textContent=message; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2500); }
 async function api(url,options={}) {
   const response=await fetch(url,{...options,headers:{'Content-Type':'application/json',...(options.headers||{})}});
@@ -38,11 +39,12 @@ document.querySelectorAll('[data-control]').forEach(button=>{const key=button.da
 document.querySelector('[data-jump]').onclick=()=>socket?.emit('jump');$('stop').onclick=()=>socket?.emit('stop');
 function renderInventory(data){const slots=data?.slots||[];$('hotbar').replaceChildren();$('inventoryGrid').replaceChildren();for(let i=0;i<9;i++){const item=slots[36+i];const b=document.createElement('button');b.className='inventory-slot'+(data.selected===i?' active':'');b.textContent=item?item.name+' ×'+item.count:String(i+1);b.onclick=()=>socket?.emit('hotbar',{slot:i});$('hotbar').append(b);}for(let i=9;i<36;i++){const item=slots[i];const b=document.createElement('button');b.className='inventory-slot';b.textContent=item?item.name+' ×'+item.count:'';b.onclick=()=>socket?.emit('inventoryClick',{slot:i});$('inventoryGrid').append(b);}}
 let inventoryOpen=false;$('inventoryButton').onclick=()=>{inventoryOpen=!inventoryOpen;$('inventoryPanel').classList.toggle('hidden',!inventoryOpen);if(inventoryOpen)socket?.emit('inventoryRequest');};$('dropButton').onclick=()=>socket?.emit('dropHeld');
-let playFocused=false;$('viewerFrame').addEventListener('pointerdown',()=>{playFocused=true;});
-window.addEventListener('keydown',e=>{if(currentMode!=='manual'||!playFocused||e.repeat)return;const map={w:'forward',a:'left',s:'back',d:'right',' ':'jump',shift:'sneak'};const k=e.key.toLowerCase();if(map[k]){e.preventDefault();socket?.emit('control',{key:map[k],pressed:true});}else if(/^[1-9]$/.test(e.key)){e.preventDefault();socket?.emit('hotbar',{slot:Number(e.key)-1});}else if(k==='q'){e.preventDefault();socket?.emit('dropHeld');}else if(k==='e'){e.preventDefault();$('inventoryButton').click();}});
-window.addEventListener('keyup',e=>{if(currentMode!=='manual'||!playFocused)return;const map={w:'forward',a:'left',s:'back',d:'right',' ':'jump',Shift:'sneak'};const k=e.key.toLowerCase();if(map[k]){e.preventDefault();socket?.emit('control',{key:map[k],pressed:false});}});
-async function botAction(action){for(const id of ['botStart','botStop','botRejoin'])$(id).disabled=true;try{const result=await api('/api/bot/'+action,{method:'POST'});updateStatus(result.bot);toast(action==='start'?'Lumi is connecting.':action==='stop'?'Lumi stopped.':'Rejoin requested.');}catch(err){toast(err.message);try{const v=await api('/api/status');updateStatus(v.bot);}catch{}}}
-$('botStart').onclick=()=>botAction('start');$('botStop').onclick=()=>botAction('stop');$('botRejoin').onclick=()=>botAction('rejoin');
+let playFocused=false;
+function gameKeyDown(e){if(currentMode!=='manual'||!playFocused||e.repeat)return;const map={w:'forward',a:'left',s:'back',d:'right',' ':'jump',shift:'sneak'};const k=e.key.toLowerCase();if(map[k]){e.preventDefault();socket?.emit('control',{key:map[k],pressed:true});}else if(/^[1-9]$/.test(e.key)){e.preventDefault();socket?.emit('hotbar',{slot:Number(e.key)-1});}else if(k==='q'){e.preventDefault();socket?.emit('dropHeld');}else if(k==='e'){e.preventDefault();$('inventoryButton').click();}}
+function gameKeyUp(e){if(currentMode!=='manual'||!playFocused)return;const map={w:'forward',a:'left',s:'back',d:'right',' ':'jump',shift:'sneak'};const k=e.key.toLowerCase();if(map[k]){e.preventDefault();socket?.emit('control',{key:map[k],pressed:false});}}
+$('viewerFrame').addEventListener('pointerdown',()=>{playFocused=true;});
+$('viewerFrame').addEventListener('load',()=>{try{const doc=$('viewerFrame').contentDocument;doc?.addEventListener('keydown',gameKeyDown);doc?.addEventListener('keyup',gameKeyUp);}catch{}});
+window.addEventListener('keydown',gameKeyDown);window.addEventListener('keyup',gameKeyUp);
 
 document.querySelectorAll('nav button').forEach(button=>button.onclick=()=>{document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active',b===button));document.querySelectorAll('.page').forEach(p=>p.classList.add('hidden'));$(button.dataset.page).classList.remove('hidden');$('heading').textContent=button.textContent.trim();if(button.dataset.page==='play')$('viewerFrame').src='/viewer/?_='+Date.now();else stopViewer();if(button.dataset.page==='memory'){loadMemories();loadSuggestions();}if(button.dataset.page==='settings')loadProviders();});
 $('memoryForm').onsubmit=async e=>{e.preventDefault();try{await api('/api/memories',{method:'POST',body:JSON.stringify({content:$('memoryInput').value})});$('memoryInput').value='';loadMemories();toast('Memory saved.');}catch(err){toast(err.message);}};
