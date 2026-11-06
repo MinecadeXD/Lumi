@@ -55,7 +55,7 @@ export class ChatManager {
     const active = Date.now() < this.sessionUntil;
     if (!mentioned && (webListening || !active)) return;
     const cleaned = mentioned
-      ? (message.slice(0, mentionIndex) + message.slice(mentionIndex + this.bot.username.length)).replace(/^[\\s,:-]+|[\\s,:-]+$/g, '').trim()
+      ? (message.slice(0, mentionIndex) + message.slice(mentionIndex + this.bot.username.length)).replace(/^[\s,:-]+|[\s,:-]+$/g, '').trim()
       : message.trim();
     this.sessionUntil = Date.now() + config.chatTimeout;
     this.emit('conversationState', { active: true, expiresAt: this.sessionUntil });
