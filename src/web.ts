@@ -159,6 +159,15 @@ io.on('connection', socket => {
   socket.emit('status', runtime.snapshot());
   socket.emit('aiState', { enabled: runtime.chat?.isAIEnabled() ?? false, mode: runtime.chat?.getMode() ?? 'manual' });
   socket.emit('mode', { mode: runtime.chat?.getMode() ?? 'manual' });
+  const sendInventory = () => {
+    const bot = runtime?.bot;
+    if (!bot) return;
+    const slots = (bot.inventory?.slots || []).map((item: any) => item ? { name: item.name, count: item.count } : null);
+    socket.emit('inventory', { slots, selected: bot.quickBarSlot ?? 0 });
+  };
+  const inventory = runtime.bot?.inventory;
+  inventory?.on('updateSlot', sendInventory);
+  socket.on('disconnect', () => inventory?.off('updateSlot', sendInventory));
   socket.on('control', (data: any) => {
     if (runtime?.chat?.getMode() !== 'manual') { socket.emit('controlError', { message: 'Website controls are disabled in Automatic mode.' }); return; }
     if (typeof data?.key === 'string' && typeof data?.pressed === 'boolean') runtime?.movement?.setControl(data.key, data.pressed);
@@ -176,6 +185,26 @@ io.on('connection', socket => {
     if (!message || message.length > 256) return;
     if (!runtime?.chat || !runtime.connected) { socket.emit('controlError', { message: 'Lumi is not connected to Minecraft.' }); return; }
     runtime.chat.sendFromDashboard(message);
+  });
+  socket.on('hotbar', (data: any) => {
+    if (runtime?.chat?.getMode() !== 'manual') return;
+    const slot = Number(data?.slot);
+    if (!Number.isInteger(slot) || slot < 0 || slot > 8 || !runtime?.bot) return;
+    try { runtime.bot.setQuickBarSlot(slot); sendInventory(); }
+    catch (error) { socket.emit('controlError', { message: error instanceof Error ? error.message : 'Could not select hotbar slot.' }); }
+  });
+  socket.on('dropHeld', () => {
+    if (runtime?.chat?.getMode() !== 'manual') return;
+    const bot = runtime?.bot;
+    if (!bot?.heldItem) return;
+    void bot.tossStack(bot.heldItem).then(sendInventory).catch(error => socket.emit('controlError', { message: error instanceof Error ? error.message : 'Could not drop item.' }));
+  });
+  socket.on('inventoryRequest', sendInventory);
+  socket.on('inventoryClick', (data: any) => {
+    if (runtime?.chat?.getMode() !== 'manual') return;
+    const slot = Number(data?.slot);
+    if (!Number.isInteger(slot) || slot < 9 || slot > 44 || !runtime?.bot) return;
+    void runtime.bot.clickWindow(slot, 0, 0).then(sendInventory).catch(error => socket.emit('controlError', { message: error instanceof Error ? error.message : 'Inventory action failed.' }));
   });
   socket.on('aiToggle', (data: any) => runtime?.chat?.setAIEnabled(Boolean(data?.enabled)));
 });
