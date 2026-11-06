@@ -89,7 +89,7 @@ app.post('/api/mode', auth, (req, res) => {
   setDefaultMode(mode);
   if (mode === 'automatic') runtime?.movement?.stop();
   runtime?.chat?.setMode(mode);
-  res.json({ success: true, mode, aiEnabled: mode === 'automatic' });
+  res.json({ success: true, mode, aiEnabled: config.aiEnabled && mode === 'automatic' });
 });
 
 app.post('/api/bot/start', auth, async (_req, res) => {
