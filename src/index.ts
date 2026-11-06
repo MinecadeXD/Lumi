@@ -49,7 +49,7 @@ async function main(): Promise<void> {
         viewer.mineflayer(bot, {
           port: config.viewer.port,
           prefix: '/viewer',
-          firstPerson: false,
+          firstPerson: true,
           viewDistance: config.viewer.distance
         });
         console.log('[Viewer] Internal viewer started; public route is /viewer/');
