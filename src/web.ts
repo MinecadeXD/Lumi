@@ -189,8 +189,9 @@ io.on('connection', socket => {
   socket.on('hotbar', (data: any) => {
     if (runtime?.chat?.getMode() !== 'manual') return;
     const slot = Number(data?.slot);
-    if (!Number.isInteger(slot) || slot < 0 || slot > 8 || !runtime?.bot) return;
-    try { runtime.bot.setQuickBarSlot(slot); sendInventory(); }
+    const bot = runtime?.bot;
+    if (!Number.isInteger(slot) || slot < 0 || slot > 8 || !bot) return;
+    try { bot.setQuickBarSlot(slot); sendInventory(); }
     catch (error) { socket.emit('controlError', { message: error instanceof Error ? error.message : 'Could not select hotbar slot.' }); }
   });
   socket.on('dropHeld', () => {
@@ -203,8 +204,9 @@ io.on('connection', socket => {
   socket.on('inventoryClick', (data: any) => {
     if (runtime?.chat?.getMode() !== 'manual') return;
     const slot = Number(data?.slot);
-    if (!Number.isInteger(slot) || slot < 9 || slot > 44 || !runtime?.bot) return;
-    void runtime.bot.clickWindow(slot, 0, 0).then(sendInventory).catch(error => socket.emit('controlError', { message: error instanceof Error ? error.message : 'Inventory action failed.' }));
+    const bot = runtime?.bot;
+    if (!Number.isInteger(slot) || slot < 9 || slot > 44 || !bot) return;
+    void bot.clickWindow(slot, 0, 0).then(sendInventory).catch(error => socket.emit('controlError', { message: error instanceof Error ? error.message : 'Inventory action failed.' }));
   });
   socket.on('aiToggle', (data: any) => runtime?.chat?.setAIEnabled(Boolean(data?.enabled)));
 });
