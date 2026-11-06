@@ -17,7 +17,7 @@ export class ChatManager {
   private mode: 'manual' | 'automatic' = 'manual';
   constructor(private bot: Bot, private movement: MovementController, private emit: Emitter) {
     this.mode = defaultMode;
-    this.aiEnabled = defaultMode === 'automatic';
+    this.aiEnabled = config.aiEnabled && defaultMode === 'automatic';
     this.bot.on('chat', (username, message) => this.onMinecraftChat(username, message));
   }
   private persist(task: Promise<void>): void { void task.catch(error => console.error('[Database]', error instanceof Error ? error.message : error)); }
