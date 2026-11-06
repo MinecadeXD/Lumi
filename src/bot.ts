@@ -26,6 +26,8 @@ export function createBotRuntime(emit: Emitter, onSpawn?: SpawnHandler): BotRunt
   let state: BotState = 'stopped';
   let lastError: string | null = null;
   let authSequenceTimers: NodeJS.Timeout[] = [];
+  let deathReconnectPending = false;
+  let reconnectTimer: NodeJS.Timeout | null = null;
   let operation: Promise<void> = Promise.resolve();
 
   const snapshot = () => {
@@ -54,6 +56,8 @@ export function createBotRuntime(emit: Emitter, onSpawn?: SpawnHandler): BotRunt
       return;
     }
     state = 'disconnecting';
+    deathReconnectPending = false;
+    if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
     clearAuthTimers();
     try { movement?.stop(); } catch {}
     try { (current as any).viewer?.close?.(); } catch (error) { console.warn('[Viewer] Could not close viewer:', error); }
@@ -161,12 +165,30 @@ export function createBotRuntime(emit: Emitter, onSpawn?: SpawnHandler): BotRunt
       });
       current.on('spawn', () => {
         if (bot !== current) return;
+        deathReconnectPending = false;
+        if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
         state = 'online';
         console.log('[Minecraft] Spawned. Lumi is idle.');
         movement?.stop();
         publish();
         scheduleAuthSequence();
         try { onSpawn?.(current); } catch (error) { console.error('[Viewer] Could not start viewer:', error); }
+      });
+      current.on('death', () => {
+        if (bot !== current || state === 'disconnecting') return;
+        deathReconnectPending = true;
+        movement?.stop();
+        console.warn('[Minecraft] Lumi died. Waiting for the server respawn.');
+        publish();
+        // Mineflayer normally respawns automatically. This is a delayed fallback
+        // for servers/protocol paths that leave the bot on the death screen.
+        if (reconnectTimer) clearTimeout(reconnectTimer);
+        reconnectTimer = setTimeout(() => {
+          reconnectTimer = null;
+          if (bot !== current || !deathReconnectPending || state !== 'online') return;
+          try { current.respawn(); }
+          catch (error) { console.warn('[Minecraft] Respawn request failed:', error); }
+        }, 8000);
       });
       current.on('health', () => { if (bot === current) publish(); });
       current.on('move', () => { if (bot === current) emit('position', snapshot().position); });
@@ -186,9 +208,17 @@ export function createBotRuntime(emit: Emitter, onSpawn?: SpawnHandler): BotRunt
         movement = null;
         chat = null;
         if (state !== 'disconnecting') {
-          state = 'error';
-          lastError = lastError || 'Minecraft connection closed unexpectedly. You can rejoin from the dashboard.';
+          const reconnectAfterDeath = deathReconnectPending;
+          state = reconnectAfterDeath ? 'connecting' : 'error';
+          lastError = reconnectAfterDeath ? 'Connection dropped after death. Reconnecting…' : (lastError || 'Minecraft connection closed unexpectedly. You can rejoin from the dashboard.');
           console.warn('[Minecraft]', lastError);
+          if (reconnectAfterDeath) {
+            if (reconnectTimer) clearTimeout(reconnectTimer);
+            reconnectTimer = setTimeout(() => {
+              reconnectTimer = null;
+              if (!bot && state === 'connecting') void enqueue(doStart);
+            }, 3000);
+          }
         } else {
           state = 'stopped';
           console.log('[Minecraft] Disconnected by dashboard.');
