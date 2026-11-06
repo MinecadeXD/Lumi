@@ -64,6 +64,7 @@ export class ChatManager {
   private enqueueAI(username: string, message: string): void {
     this.queue = this.queue.then(async () => {
       this.history.push({ role: 'user', content: '[' + username + ']: ' + message });
+      this.history = this.history.slice(-config.contextMessages);
       try {
         const memories = await getApprovedMemories();
         const result = await this.ai.reply(this.history, memories, username, message);
