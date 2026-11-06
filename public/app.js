@@ -10,7 +10,7 @@ async function api(url,options={}) {
   if(!response.ok)throw new Error(data.error||'Request failed.');
   return data;
 }
-function stopViewer(){ $('viewerFrame').src='about:blank'; playFocused=false; }
+function stopViewer(){ if(playFocused)socket?.emit('stop'); $('viewerFrame').src='about:blank'; playFocused=false; }
 function showLogin(){ stopViewer();$('login').classList.remove('hidden');$('app').classList.add('hidden');if(socket)socket.disconnect(); }
 function showApp(){ $('login').classList.add('hidden');$('app').classList.remove('hidden');connect();loadAll(); }
 $('loginForm').addEventListener('submit',async e=>{e.preventDefault();$('loginError').textContent='';try{await api('/api/login',{method:'POST',body:JSON.stringify({username:$('username').value,password:$('password').value})});showApp();}catch(err){$('loginError').textContent=err.message;}});
