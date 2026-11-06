@@ -135,6 +135,11 @@ export function createBotRuntime(emit: Emitter, onSpawn?: SpawnHandler): BotRunt
       }
 
       bot = current;
+      const publishInventory = () => emit('inventory', {
+        slots: current.inventory.slots.map(item => item ? { name: item.name, count: item.count } : null),
+        selected: current.quickBarSlot ?? 0
+      });
+      current.inventory.on('updateSlot', publishInventory);
       movement = new MovementController(current);
       chat = new ChatManager(current, movement, emit);
       let authSequenceStarted = false;
