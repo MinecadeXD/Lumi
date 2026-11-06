@@ -38,8 +38,6 @@ export class MovementController {
     if (lower === 'come here') return this.comeHere(username) ? 'On my way, ' + username + '!' : 'I cannot see you right now.';
     if (lower === 'follow me') return this.follow(username) ? 'Okay, I will follow you!' : 'I cannot see you right now.';
     if (lower === 'stop' || lower === 'stay') { this.stop(); return lower === 'stay' ? 'I will stay here.' : 'Stopped.'; }
-    if (lower === 'jump') { this.jump(); return 'Boing!'; }
-    if (lower === 'sneak') { const next = !this.bot.getControlState('sneak'); this.bot.setControlState('sneak', next); return next ? 'Sneaking.' : 'Stopped sneaking.'; }
     const match = lower.match(/^goto\s+(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)$/);
     if (match) {
       const [x, y, z] = match.slice(1).map(Number);
