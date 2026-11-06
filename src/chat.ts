@@ -10,12 +10,24 @@ export class ChatManager {
   private sessionUntil = 0;
   private webListenUntil = 0;
   private queue: Promise<void> = Promise.resolve();
-  private aiEnabled = config.aiEnabled;
+  private aiEnabled = false;
+  private mode: 'manual' | 'automatic' = 'manual';
   constructor(private bot: Bot, private movement: MovementController, private emit: Emitter) {
     this.bot.on('chat', (username, message) => this.onMinecraftChat(username, message));
   }
   private persist(task: Promise<void>): void { void task.catch(error => console.error('[Database]', error instanceof Error ? error.message : error)); }
-  setAIEnabled(enabled: boolean): void { this.aiEnabled = enabled; this.emit('aiState', { enabled }); }
+  setMode(mode: 'manual' | 'automatic'): void {
+    this.mode = mode;
+    this.aiEnabled = mode === 'automatic';
+    this.emit('aiState', { enabled: this.aiEnabled, mode: this.mode });
+    this.emit('mode', { mode: this.mode });
+  }
+  getMode(): 'manual' | 'automatic' { return this.mode; }
+  setAIEnabled(enabled: boolean): void {
+    if (this.mode !== 'automatic') return;
+    this.aiEnabled = enabled;
+    this.emit('aiState', { enabled, mode: this.mode });
+  }
   isAIEnabled(): boolean { return this.aiEnabled; }
   private onMinecraftChat(username: string, message: string): void {
     if (!message || username === this.bot.username) return;
@@ -23,9 +35,13 @@ export class ChatManager {
     this.persist(touchPlayer(username));
     const webListening = Date.now() < this.webListenUntil;
     if (webListening) this.emit('webIncoming', { source: 'minecraft', username, message, time: new Date().toISOString() });
-    const commandResponse = this.movement.command(message, username);
-    if (commandResponse) { this.sendBotMessage(commandResponse); return; }
-    if (!this.aiEnabled) return;
+    // Movement is strictly opt-in: only the five whitelisted commands addressed
+    // to Lumi are parsed, and only while Automatic mode is active.
+    if (this.mode === 'automatic') {
+      const commandResponse = this.movement.command(message, username);
+      if (commandResponse) { this.sendBotMessage(commandResponse); return; }
+    }
+    if (!this.aiEnabled || this.mode !== 'automatic') return;
     const name = this.bot.username.toLowerCase();
     const lower = message.toLowerCase();
     const mentionIndex = lower.indexOf(name);
