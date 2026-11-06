@@ -179,6 +179,7 @@ export function createBotRuntime(emit: Emitter, onSpawn?: SpawnHandler): BotRunt
         console.log('[Minecraft] Spawned. Lumi is idle.');
         movement?.stop();
         publish();
+        publishInventory();
         scheduleAuthSequence();
         try { onSpawn?.(current); } catch (error) { console.error('[Viewer] Could not start viewer:', error); }
       });
