@@ -103,7 +103,8 @@ export function createBotRuntime(emit: Emitter, onSpawn?: SpawnHandler): BotRunt
         port: config.minecraft.port,
         username: config.minecraft.username,
         auth: config.minecraft.auth as any,
-        version: config.minecraft.version
+        version: config.minecraft.version,
+        respawn: true
       });
 
       // Minecraft 26.3 requires client_tick_end after movement packets.
