@@ -31,7 +31,7 @@ export class ChatManager {
   getMode(): 'manual' | 'automatic' { return this.mode; }
   setAIEnabled(enabled: boolean): void {
     if (this.mode !== 'automatic') return;
-    this.aiEnabled = enabled;
+    this.aiEnabled = config.aiEnabled && enabled;
     this.emit('aiState', { enabled, mode: this.mode });
   }
   isAIEnabled(): boolean { return this.aiEnabled; }
