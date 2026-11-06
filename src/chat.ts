@@ -4,6 +4,9 @@ import { config } from './config';
 import { addSuggestionIfNew, getApprovedMemories, logChat, touchPlayer } from './database';
 import { MovementController } from './movement';
 type Emitter = (event: string, payload: any) => void;
+let defaultMode: 'manual' | 'automatic' = 'manual';
+export function getDefaultMode(): 'manual' | 'automatic' { return defaultMode; }
+export function setDefaultMode(mode: 'manual' | 'automatic'): void { defaultMode = mode; }
 export class ChatManager {
   private ai = new AIManager();
   private history: Message[] = [];
@@ -13,10 +16,13 @@ export class ChatManager {
   private aiEnabled = false;
   private mode: 'manual' | 'automatic' = 'manual';
   constructor(private bot: Bot, private movement: MovementController, private emit: Emitter) {
+    this.mode = defaultMode;
+    this.aiEnabled = defaultMode === 'automatic';
     this.bot.on('chat', (username, message) => this.onMinecraftChat(username, message));
   }
   private persist(task: Promise<void>): void { void task.catch(error => console.error('[Database]', error instanceof Error ? error.message : error)); }
   setMode(mode: 'manual' | 'automatic'): void {
+    defaultMode = mode;
     this.mode = mode;
     this.aiEnabled = mode === 'automatic';
     this.emit('aiState', { enabled: this.aiEnabled, mode: this.mode });
