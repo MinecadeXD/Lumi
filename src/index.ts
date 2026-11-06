@@ -53,6 +53,7 @@ async function main(): Promise<void> {
           firstPerson: true,
           viewDistance: config.viewer.distance
         });
+        viewerBots.add(bot);
         console.log('[Viewer] Internal viewer started; public route is /viewer/');
       } catch (error) {
         console.error('[Viewer] Could not start viewer:', error);
