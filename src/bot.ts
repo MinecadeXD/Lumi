@@ -101,6 +101,32 @@ export function createBotRuntime(emit: Emitter, onSpawn?: SpawnHandler): BotRunt
         auth: config.minecraft.auth as any,
         version: config.minecraft.version
       });
+
+      // Minecraft 26.3 requires client_tick_end after movement packets.
+      // Mineflayer 4.39.0 does not emit it, which can cause Paper 26.3 to
+      // reject the connection after movement starts. ViaVersion/ViaBackwards
+      // should forward this packet. Older protocols without tick_end simply
+      // reject the write; that compatibility case is intentionally ignored.
+      const protocolClient = (current as any)._client;
+      if (protocolClient && typeof protocolClient.write === 'function') {
+        const originalWrite = protocolClient.write.bind(protocolClient);
+        const movementPackets = new Set(['position', 'position_look', 'look', 'flying']);
+        protocolClient.write = (name: string, packet: any) => {
+          const result = originalWrite(name, packet);
+          if (movementPackets.has(name)) {
+            try {
+              originalWrite('tick_end', {});
+            } catch {
+              // The packet is not defined by older Minecraft protocols.
+            }
+          }
+          return result;
+        };
+        console.log('[Minecraft] Installed client_tick_end compatibility patch.');
+      } else {
+        console.warn('[Minecraft] Could not install client_tick_end compatibility patch.');
+      }
+
       bot = current;
       movement = new MovementController(current);
       chat = new ChatManager(current, movement, emit);
