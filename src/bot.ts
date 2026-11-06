@@ -39,7 +39,9 @@ export function createBotRuntime(emit: Emitter, onSpawn?: SpawnHandler): BotRunt
       username: bot?.username || config.minecraft.username,
       health: bot?.health ?? null,
       food: bot?.food ?? null,
-      position: pos ? { x: Number(pos.x.toFixed(2)), y: Number(pos.y.toFixed(2)), z: Number(pos.z.toFixed(2)) } : null
+      position: pos ? { x: Number(pos.x.toFixed(2)), y: Number(pos.y.toFixed(2)), z: Number(pos.z.toFixed(2)) } : null,
+      yaw: bot?.entity?.yaw ?? 0,
+      pitch: bot?.entity?.pitch ?? 0
     };
   };
   const publish = () => emit('status', snapshot());
