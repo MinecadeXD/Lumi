@@ -35,7 +35,7 @@ export class MovementController {
     if (!message.toLowerCase().startsWith(name.toLowerCase() + ' ')) return null;
     const cmd = message.trim().slice(name.length).trim();
     const lower = cmd.toLowerCase();
-    if (lower === 'come here' || lower === 'come to me') return this.comeHere(username) ? 'On my way, ' + username + '!' : 'I cannot see you right now.';
+    if (lower === 'come here') return this.comeHere(username) ? 'On my way, ' + username + '!' : 'I cannot see you right now.';
     if (lower === 'follow me') return this.follow(username) ? 'Okay, I will follow you!' : 'I cannot see you right now.';
     if (lower === 'stop' || lower === 'stay') { this.stop(); return lower === 'stay' ? 'I will stay here.' : 'Stopped.'; }
     if (lower === 'jump') { this.jump(); return 'Boing!'; }
