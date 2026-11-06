@@ -169,6 +169,7 @@ io.on('connection', socket => {
   };
   const inventory = runtime.bot?.inventory;
   inventory?.on('updateSlot', sendInventory);
+  sendInventory();
   socket.on('disconnect', () => inventory?.off('updateSlot', sendInventory));
   socket.on('control', (data: any) => {
     if ((runtime?.chat?.getMode() ?? getDefaultMode()) !== 'manual') { socket.emit('controlError', { message: 'Website controls are disabled in Automatic mode.' }); return; }
@@ -179,7 +180,7 @@ io.on('connection', socket => {
     const yaw = Number(data?.yaw);
     const pitch = Number(data?.pitch);
     if (!Number.isFinite(yaw) || !Number.isFinite(pitch) || pitch < -Math.PI / 2 || pitch > Math.PI / 2) return;
-    try { void runtime?.bot?.look(yaw, pitch, true); } catch {}
+    try { const bot = runtime?.bot; if (bot) void bot.look(yaw, pitch, true).catch(() => undefined); } catch {}
   });
   socket.on('stop', () => {
     if (runtime?.chat?.getMode() !== 'manual') { socket.emit('controlError', { message: 'Website controls are disabled in Automatic mode.' }); return; }
