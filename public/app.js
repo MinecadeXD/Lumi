@@ -15,6 +15,23 @@ function showLogin(){ stopViewer();$('login').classList.remove('hidden');$('app'
 function showApp(){ $('login').classList.add('hidden');$('app').classList.remove('hidden');connect();loadAll(); }
 $('loginForm').addEventListener('submit',async e=>{e.preventDefault();$('loginError').textContent='';try{await api('/api/login',{method:'POST',body:JSON.stringify({username:$('username').value,password:$('password').value})});showApp();}catch(err){$('loginError').textContent=err.message;}});
 $('logout').onclick=async()=>{try{await api('/api/logout',{method:'POST'});}catch{}showLogin();};
+async function botAction(action){
+  const buttons=[$('botStart'),$('botStop'),$('botRejoin')];
+  buttons.forEach(button=>button.disabled=true);
+  try{
+    const result=await api('/api/bot/'+action,{method:'POST'});
+    if(result.bot)updateStatus(result.bot);
+    if(result.bot?.state==='error')toast(result.bot.error||'Minecraft connection failed.');
+    else toast(action==='start'?'Starting Lumi…':action==='stop'?'Lumi stopped.':'Rejoining Minecraft…');
+  }catch(err){
+    toast(err.message||'Bot action failed.');
+    try{const status=await api('/api/status');updateStatus(status.bot);}catch{}
+  }
+}
+$('botStart').onclick=()=>botAction('start');
+$('botStop').onclick=()=>botAction('stop');
+$('botRejoin').onclick=()=>botAction('rejoin');
+
 function connect(){
  if(socket)socket.disconnect();socket=io();
  socket.on('connect_error',()=>toast('Dashboard connection lost.'));
