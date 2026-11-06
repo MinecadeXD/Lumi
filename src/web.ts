@@ -174,6 +174,13 @@ io.on('connection', socket => {
     if ((runtime?.chat?.getMode() ?? getDefaultMode()) !== 'manual') { socket.emit('controlError', { message: 'Website controls are disabled in Automatic mode.' }); return; }
     if (typeof data?.key === 'string' && typeof data?.pressed === 'boolean') runtime?.movement?.setControl(data.key, data.pressed);
   });
+  socket.on('look', (data: any) => {
+    if ((runtime?.chat?.getMode() ?? getDefaultMode()) !== 'manual') return;
+    const yaw = Number(data?.yaw);
+    const pitch = Number(data?.pitch);
+    if (!Number.isFinite(yaw) || !Number.isFinite(pitch) || pitch < -Math.PI / 2 || pitch > Math.PI / 2) return;
+    try { void runtime?.bot?.look(yaw, pitch, true); } catch {}
+  });
   socket.on('stop', () => {
     if (runtime?.chat?.getMode() !== 'manual') { socket.emit('controlError', { message: 'Website controls are disabled in Automatic mode.' }); return; }
     runtime?.movement?.stop();
