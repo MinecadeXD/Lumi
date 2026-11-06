@@ -4,15 +4,21 @@
   "private": true,
   "description": "A conversational AI Minecraft companion with a remote dashboard.",
   "license": "MIT",
-  "engines": { "node": ">=22.0.0" },
-  "scripts": { "dev": "tsx watch src/index.ts", "build": "tsc -p tsconfig.json", "start": "node dist/index.js" },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js"
+  },
   "dependencies": {
     "better-sqlite3": "^13.0.3",
     "canvas": "^3.2.3",
     "dotenv": "^18.0.9",
     "express": "^5.3.0",
     "http-proxy": "^1.18.1",
-    "mineflayer": "^4.39.0",
+    "mineflayer": "github:PrismarineJS/mineflayer#pc26_3",
     "mineflayer-pathfinder": "^2.4.5",
     "prismarine-viewer": "^1.33.0",
     "socket.io": "^4.8.4",
@@ -23,5 +29,7 @@
     "@types/pg": "^8.23.1",
     "typescript": "^7.0.2"
   },
-  "devDependencies": { "tsx": "^4.23.15" }
+  "devDependencies": {
+    "tsx": "^4.23.15"
+  }
 }
