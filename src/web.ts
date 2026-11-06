@@ -160,7 +160,7 @@ io.on('connection', socket => {
   if (!runtime) return;
   socket.emit('status', runtime.snapshot());
   socket.emit('aiState', { enabled: runtime.chat?.isAIEnabled() ?? false, mode: runtime.chat?.getMode() ?? getDefaultMode() });
-  socket.emit('mode', { mode: runtime.chat?.getMode() ?? 'manual' });
+  socket.emit('mode', { mode: runtime.chat?.getMode() ?? getDefaultMode() });
   const sendInventory = () => {
     const bot = runtime?.bot;
     if (!bot) return;
@@ -183,7 +183,7 @@ io.on('connection', socket => {
     try { const bot = runtime?.bot; if (bot) void bot.look(yaw, pitch, true).catch(() => undefined); } catch {}
   });
   socket.on('stop', () => {
-    if (runtime?.chat?.getMode() !== 'manual') { socket.emit('controlError', { message: 'Website controls are disabled in Automatic mode.' }); return; }
+    if ((runtime?.chat?.getMode() ?? getDefaultMode()) !== 'manual') { socket.emit('controlError', { message: 'Website controls are disabled in Automatic mode.' }); return; }
     runtime?.movement?.stop();
   });
   socket.on('jump', () => {
@@ -214,7 +214,7 @@ io.on('connection', socket => {
   });
   socket.on('inventoryRequest', sendInventory);
   socket.on('inventoryClick', (data: any) => {
-    if (runtime?.chat?.getMode() !== 'manual') return;
+    if ((runtime?.chat?.getMode() ?? getDefaultMode()) !== 'manual') return;
     const slot = Number(data?.slot);
     const bot = runtime?.bot;
     if (!Number.isInteger(slot) || slot < 9 || slot > 44 || !bot) return;
