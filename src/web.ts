@@ -10,6 +10,7 @@ import {
   updateMemory, updateProvider
 } from './database';
 import { BotRuntime } from './bot';
+import { getDefaultMode, setDefaultMode } from './chat';
 
 const app = express();
 const server = http.createServer(app);
@@ -77,7 +78,7 @@ app.get('/api/status', auth, (_req, res) => {
     bot: runtime ? runtime.snapshot() : { connected: false, state: 'stopped', username: config.minecraft.username, health: null, food: null, position: null },
     chat: runtime?.chat?.getState() || null,
     aiEnabled: runtime?.chat?.isAIEnabled() ?? false,
-    mode: runtime?.chat?.getMode() ?? 'manual',
+    mode: runtime?.chat?.getMode() ?? getDefaultMode(),
     viewerPath: '/viewer/'
   });
 });
@@ -85,6 +86,7 @@ app.get('/api/status', auth, (_req, res) => {
 app.post('/api/mode', auth, (req, res) => {
   const mode = req.body?.mode;
   if (mode !== 'manual' && mode !== 'automatic') { res.status(400).json({ error: 'Mode must be manual or automatic.' }); return; }
+  setDefaultMode(mode);
   runtime?.chat?.setMode(mode);
   res.json({ success: true, mode, aiEnabled: mode === 'automatic' });
 });
@@ -157,7 +159,7 @@ io.use((socket, next) => {
 io.on('connection', socket => {
   if (!runtime) return;
   socket.emit('status', runtime.snapshot());
-  socket.emit('aiState', { enabled: runtime.chat?.isAIEnabled() ?? false, mode: runtime.chat?.getMode() ?? 'manual' });
+  socket.emit('aiState', { enabled: runtime.chat?.isAIEnabled() ?? false, mode: runtime.chat?.getMode() ?? getDefaultMode() });
   socket.emit('mode', { mode: runtime.chat?.getMode() ?? 'manual' });
   const sendInventory = () => {
     const bot = runtime?.bot;
@@ -169,7 +171,7 @@ io.on('connection', socket => {
   inventory?.on('updateSlot', sendInventory);
   socket.on('disconnect', () => inventory?.off('updateSlot', sendInventory));
   socket.on('control', (data: any) => {
-    if (runtime?.chat?.getMode() !== 'manual') { socket.emit('controlError', { message: 'Website controls are disabled in Automatic mode.' }); return; }
+    if ((runtime?.chat?.getMode() ?? getDefaultMode()) !== 'manual') { socket.emit('controlError', { message: 'Website controls are disabled in Automatic mode.' }); return; }
     if (typeof data?.key === 'string' && typeof data?.pressed === 'boolean') runtime?.movement?.setControl(data.key, data.pressed);
   });
   socket.on('stop', () => {
