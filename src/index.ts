@@ -41,10 +41,12 @@ async function main(): Promise<void> {
     console.error('[Viewer] Could not load viewer:', error);
   }
 
+  const viewerBots = new WeakSet<object>();
   const runtime = createBotRuntime(
     (event, payload) => broadcast(event, payload),
     bot => {
-      if (!viewerAvailable) return;
+      if (!viewerAvailable || viewerBots.has(bot)) return;
+      viewerBots.add(bot);
       try {
         viewer.mineflayer(bot, {
           port: config.viewer.port,
