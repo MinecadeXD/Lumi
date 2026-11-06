@@ -25,7 +25,9 @@ async function botAction(action){
     else toast(action==='start'?'Starting Lumi…':action==='stop'?'Lumi stopped.':'Rejoining Minecraft…');
   }catch(err){
     toast(err.message||'Bot action failed.');
-    try{const status=await api('/api/status');updateStatus(status.bot);}catch{}
+    let refreshed=false;
+    try{const status=await api('/api/status');updateStatus(status.bot);refreshed=true;}catch{}
+    if(!refreshed)buttons.forEach(button=>button.disabled=false);
   }
 }
 $('botStart').onclick=()=>botAction('start');
