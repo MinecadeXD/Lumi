@@ -87,6 +87,7 @@ app.post('/api/mode', auth, (req, res) => {
   const mode = req.body?.mode;
   if (mode !== 'manual' && mode !== 'automatic') { res.status(400).json({ error: 'Mode must be manual or automatic.' }); return; }
   setDefaultMode(mode);
+  if (mode === 'automatic') runtime?.movement?.stop();
   runtime?.chat?.setMode(mode);
   res.json({ success: true, mode, aiEnabled: mode === 'automatic' });
 });
